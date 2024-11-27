@@ -1,4 +1,5 @@
 #!/bin/bash -e
+LOGS=${LOGS:-/tmp}
 
 key() {
   echo ${1//\//_}
@@ -26,7 +27,7 @@ copy_to_s3() {
   mv  "$source/*.xml"  "$tempdir" | :
   echo "copying to s3"
   ls "$tempdir"
-  s3cmd -c "$s3.cfg" -v sync "$tempdir/" --no-delete-removed "s3://$s3"  | tee -a "/tmp/$(key "$1").log"
+  s3cmd -c "$s3.cfg" -v sync "$tempdir/" --no-delete-removed "s3://$s3"  | tee -a "$LOGS/$(key "$1").log"
 }
 
 
@@ -65,13 +66,15 @@ watch_temp() {
     while read -r file; do
       full_path="$tempdir/$file"
       for s3 in $s3s ; do
-        s3cmd -c "$s3".cfg -v put "$full_path" "s3://$s3"  | tee -a "/tmp/$(key "$1").log"
+        s3cmd -c "$s3".cfg -v put "$full_path" "s3://$s3"  | tee -a "$LOGS/$(key "$1").log"
       done
-      mv "$full_path" "$archive" | tee -a "/tmp/$(key "$1").log"
+      mv "$full_path" "$archive" | tee -a "$LOGS/$(key "$1").log"
     done
 }
 
 start() {
+  mkdir -p "$LOGS"
+  echo "Logging to $LOGS"
   # start with copying files already there
   copy_to_s3 "$1" "$2"
 

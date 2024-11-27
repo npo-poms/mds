@@ -9,7 +9,7 @@ docker:
 	docker build  -t $(IMAGE) .
 
 test:
-	docker run -it -v /tmp:/tmp -v .:/workdir $(IMAGE) /tmp/$(S3) $(S3)
+	docker run -it -e LOGS=/tmp/logs -v /tmp:/tmp -v .:/workdir $(IMAGE) /tmp/$(S3) $(S3)
 
 
 explore:
