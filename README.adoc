@@ -1,0 +1,19 @@
+
+== Requirements
+
+- bash
+- s3cmd (brew install s3cmd)
+
+
+== Configuration
+
+[source, bash]
+---
+
+s3cmd --configure --config=mihxil.cfg
+---
+
+== TEST
+
+make docker
+docker run -it -v /tmp:/tmp -v .:/workdir
