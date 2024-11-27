@@ -2,7 +2,10 @@
 == Requirements
 
 - bash
-- s3cmd (brew install s3cmd)
+- s3cmd (apt-get install s3cmd)
+- inotify-tools (apt-get install inotify-tools)
+
+Tested in link:Dockerfile[Dockerfile]
 
 
 == Configuration
@@ -12,6 +15,7 @@
 
 s3cmd --configure --config=<your s3 bucket>.cfg
 ----
+provide it credentials. A file will be created, which can be used by s3cmd later on.
 
 == TEST
 
