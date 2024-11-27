@@ -4,8 +4,9 @@
 - bash
 - s3cmd (apt-get install s3cmd)
 - inotify-tools (apt-get install inotify-tools)
+- xmllint (apt-get install libxml2-utils)
 
-Tested in link:Dockerfile[Dockerfile]
+See also, and tested in link:Dockerfile[Dockerfile]
 
 
 == Configuration
@@ -34,6 +35,6 @@ The script can be crontabbed, but something must be arranged to keep it alive. M
 
 It supports only one directory/s3 now. May be we can just have an instance per directory.
 
-Routing to different s3-targets could just be done by splitting the S3 string.
++++<del>+++Routing to different s3-targets could just be done by splitting the S3 string.+++</del>+++
 
-Might have some issue if the files are written in place, en not _moved_ into the source directory.  We may have to have an extra step then.
++++<del>+++Might have some issue if the files are written in place, en not _moved_ into the source directory.  We may have to have an extra step then.+++</del>+++
