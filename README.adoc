@@ -8,12 +8,26 @@
 == Configuration
 
 [source, bash]
----
+----
 
-s3cmd --configure --config=mihxil.cfg
----
+s3cmd --configure --config=<your s3 bucket>.cfg
+----
 
 == TEST
 
+I tested it out in a (custom) ubuntu image
+
+[source, bash]
+----
 make docker
-docker run -it -v /tmp:/tmp -v .:/workdir
+make test S3=<your s3 bucket>
+----
+This will watch your /tmp/<bucket name> and sync it to s3://<bucket name>
+
+== TODO
+
+The script can be crontabbed, but something must be arranged to keep it alive. May be it can just be put to inittab.
+
+It supports only one directory/s3 now. May be we can just have an instance per directory.
+
+Routing to different s3-targets could just be done by splitting the S3 string.
