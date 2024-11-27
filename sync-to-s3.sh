@@ -1,5 +1,7 @@
 #!/bin/bash -e
 LOGS=${LOGS:-/tmp}
+ARCHIVE=${ARCHIVE:-/tmp/archive}
+
 
 key() {
   echo ${1//\//_}
@@ -10,7 +12,7 @@ temp_source() {
 }
 
 archive_dir() {
-  echo "/tmp/archive/$(key "$1")"
+  echo "$ARCHIVE/$(key "$1")"
 }
 
 # Just directly sync to s3. If the input directory is well behaved, this may be enough
@@ -22,12 +24,13 @@ copy_to_s3() {
   source=$1
   s3=$2
   tempdir=$(temp_source $1)
-  mkdir -p $tempdir
-  rm -rf "${tempdir:?}/*"
-  mv  "$source/*.xml"  "$tempdir" | :
+  mkdir -p "$tempdir"
+  mv  -v "$source/"*.xml  "$tempdir" | tee -a "$LOGS/$(key "$1").log"
   echo "copying to s3"
-  ls "$tempdir"
   s3cmd -c "$s3.cfg" -v sync "$tempdir/" --no-delete-removed "s3://$s3"  | tee -a "$LOGS/$(key "$1").log"
+  echo moving
+  mv -v "${tempdir}/"* "$(archive_dir $source)" | tee -a "$LOGS/$(key "$1").log"
+
 }
 
 
@@ -42,9 +45,9 @@ watch_to_copy() {
   mkdir -p "$source"
   inotifywait "$source" --monitor -e modify --format "%f:%e" | \
     while  IFS=':' read -r file event; do
-      echo "considering $event $source/$file"
+      #echo "considering $event $source/$file"
       if xmllint --noout "$source/$file" ; then
-        mv "$source/$file" "$tempdir"
+        mv -v "$source/$file" "$tempdir" | tee -a "$LOGS/$(key "$1").log"
       else
         echo "$source/$file" seems not ready yet
       fi
@@ -66,7 +69,7 @@ watch_temp() {
     while read -r file; do
       full_path="$tempdir/$file"
       for s3 in $s3s ; do
-        s3cmd -c "$s3".cfg -v put "$full_path" "s3://$s3"  | tee -a "$LOGS/$(key "$1").log"
+        s3cmd -c "$s3".cfg --no-check-md5 --preserve --stats    put "$full_path" "s3://$s3"  | tee -a "$LOGS/$(key "$1").log"
       done
       mv "$full_path" "$archive" | tee -a "$LOGS/$(key "$1").log"
     done
@@ -78,11 +81,16 @@ start() {
   # start with copying files already there
   copy_to_s3 "$1" "$2"
 
-  # appearing files are moved to a auxiliary temp dir
-  watch_to_copy "$1" &
+  # temp directory is watched to copy to s3 (and then move the file to archive)
+  watch_temp "$1" "$2" &
 
-  # and that directory is watched to copy to s3 (and then move the file to archive)
-  watch_temp "$1" "$2"
+
+  # appearing files are moved to a auxiliary temp dir
+  watch_to_copy "$1"
+
+
+
+
 }
 
 start "$@"
