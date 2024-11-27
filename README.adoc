@@ -35,3 +35,5 @@ The script can be crontabbed, but something must be arranged to keep it alive. M
 It supports only one directory/s3 now. May be we can just have an instance per directory.
 
 Routing to different s3-targets could just be done by splitting the S3 string.
+
+Might have some issue if the files are written in place, en not _moved_ into the source directory.  We may have to have an extra step then.
