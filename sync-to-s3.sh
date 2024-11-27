@@ -19,7 +19,7 @@ copy_to_s3() {
   echo "copying to s3"
   ls $tempdir
 
-  s3cmd -c $s3.cfg -v sync $tempdir --no-delete-removed s3://$s3  | tee -a /tmp/rsync.log
+  s3cmd -c $s3.cfg -v sync $tempdir/ --no-delete-removed s3://$s3  | tee -a /tmp/rsync.log
 
 }
 watch() {
