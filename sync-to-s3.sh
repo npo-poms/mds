@@ -46,13 +46,15 @@ watch_to_copy() {
 }
 
 # watches temp directory, and moves all appearing (valid) xml files to temp_source
+# I doubt whether this is actually needed. rsync will use temp-file, and then move to correct file name. So the include .xml should perhaps have been sufficient.
+
 # $1 source directory to watch for
 watch_temp() {
   tempdir=$(temp_source $1)
   s3s=$2
   archive=$(archive_dir $source)
   mkdir -p "$archive"
-  inotifywait "$tempdir" --monitor -e moved_to --format "%f" | \
+  inotifywait "$tempdir" --include '.*\.xml$' --monitor -e moved_to --format "%f" | \
     while read -r file; do
       full_path="$tempdir/$file"
       for s3 in $s3s ; do
