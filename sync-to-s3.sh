@@ -12,6 +12,9 @@ archive_dir() {
   echo "/tmp/archive/$(key "$1")"
 }
 
+# Just directly sync to s3. If the input directory is well behaved, this may be enough
+# just schedule it sometimes.
+#
 # $1 source directory
 # $2 s3-bucket destination
 copy_to_s3() {
@@ -20,11 +23,14 @@ copy_to_s3() {
   tempdir=$(temp_source $1)
   mkdir -p $tempdir
   rm -rf "${tempdir:?}/*"
-  mv  "$source/*"  "$tempdir" | :
+  mv  "$source/*.xml"  "$tempdir" | :
   echo "copying to s3"
   ls "$tempdir"
   s3cmd -c "$s3.cfg" -v sync "$tempdir/" --no-delete-removed "s3://$s3"  | tee -a "/tmp/$(key "$1").log"
 }
+
+
+## watching though of course has the advantage that the files will be moved asap!
 
 # watches a directory, and copies all appearing (valid) xml files to temp_source
 # $1 source directory to watch for
@@ -36,7 +42,7 @@ watch_to_copy() {
   inotifywait "$source" --monitor -e modify --format "%f:%e" | \
     while  IFS=':' read -r file event; do
       echo "considering $event $source/$file"
-      if xmllint --noout "$source"/"$file" ; then
+      if xmllint --noout "$source/$file" ; then
         mv "$source/$file" "$tempdir"
       else
         echo "$source/$file" seems not ready yet
@@ -48,7 +54,8 @@ watch_to_copy() {
 # watches temp directory, and moves all appearing (valid) xml files to temp_source
 # I doubt whether this is actually needed. rsync will use temp-file, and then move to correct file name. So the include .xml should perhaps have been sufficient.
 
-# $1 source directory to watch for
+# $1 source directory to watch for (will be impliticly converted to temp dir)
+# $2 s3-bucket destination
 watch_temp() {
   tempdir=$(temp_source $1)
   s3s=$2
@@ -64,11 +71,15 @@ watch_temp() {
     done
 }
 
-# start with copying files already there
-copy_to_s3 "$1" "$2"
+start() {
+  # start with copying files already there
+  copy_to_s3 "$1" "$2"
 
-# appearing files are moved to a auxiliary temp dir
-watch_to_copy "$1" &
+  # appearing files are moved to a auxiliary temp dir
+  watch_to_copy "$1" &
 
-# and that directory is watched to copy to s3 (and then move the file to archive)
-watch_temp "$1" "$2"
+  # and that directory is watched to copy to s3 (and then move the file to archive)
+  watch_temp "$1" "$2"
+}
+
+start "$@"
