@@ -2,34 +2,25 @@
 LOGS=${LOGS:-/tmp}
 ARCHIVE=${ARCHIVE:-/tmp/archive}
 
-
-key() {
-  echo ${1//\//_}
-}
-
-temp_source() {
-  echo "/tmp/$(key "$1")"
-}
-
-archive_dir() {
-  echo "$ARCHIVE/$(key "$1")"
-}
+KEY=${1//\//_}
+LOG_FILE="${LOGS}/$KEY.log"
+ARCHIVE_DIR="$ARCHIVE/$KEY"
+TEMP_DIR="/tmp/$KEY.tmpdir"
+SOURCE_DIR=$1
+S3S=$2
 
 # Just directly sync to s3. If the input directory is well behaved, this may be enough
 # just schedule it sometimes.
-#
-# $1 source directory
-# $2 s3-bucket destination
+
 copy_to_s3() {
-  source=$1
-  s3=$2
-  tempdir=$(temp_source $1)
-  mkdir -p "$tempdir"
-  mv  -v "$source/"*.xml  "$tempdir" | tee -a "$LOGS/$(key "$1").log"
+  mkdir -p "$TEMP_DIR"
+  mv  -v "$SOURCE_DIR/"*.xml  "$TEMP_DIR" | tee -a "$LOG_FILE"
   echo "copying to s3"
-  s3cmd -c "$s3.cfg" -v sync "$tempdir/" --no-delete-removed "s3://$s3"  | tee -a "$LOGS/$(key "$1").log"
+  for s3 in $S3S ; do
+     s3cmd -c "$s3.cfg" -v sync "$TEMP_DIR/" --no-delete-removed "s3://$s3"  | tee -a "$LOG_FILE"
+  done
   echo moving
-  mv -v "${tempdir}/"* "$(archive_dir $source)" | tee -a "$LOGS/$(key "$1").log"
+  mv -v "$TEMP_DIR/"* "$ARCHIVE_DIR" | tee -a "$LOG_FILE"
 
 }
 
@@ -39,58 +30,45 @@ copy_to_s3() {
 # watches a directory, and copies all appearing (valid) xml files to temp_source
 # $1 source directory to watch for
 watch_to_copy() {
-  source=$1
-  tempdir=$(temp_source $source)
-  mkdir -p "$tempdir"
-  mkdir -p "$source"
-  inotifywait "$source" --monitor -e modify --format "%f:%e" | \
+  mkdir -p "$TEMP_DIR"
+  mkdir -p "$SOURCE_DIR"
+  inotifywait "$SOURCE_DIR" --monitor -e modify --format "%f:%e" | \
     while  IFS=':' read -r file event; do
       #echo "considering $event $source/$file"
-      if xmllint --noout "$source/$file" ; then
-        mv -v "$source/$file" "$tempdir" | tee -a "$LOGS/$(key "$1").log"
+      if xmllint --noout "$SOURCE_DIR/$file" ; then
+        mv -v "$SOURCE_DIR/$file" "$TEMP_DIR" | tee -a "$LOG_FILE"
       else
-        echo "$source/$file" seems not ready yet
+        echo "$SOURCE_DIR/$file" seems not ready yet
       fi
-
     done
 }
 
 # watches temp directory, and moves all appearing (valid) xml files to temp_source
 # I doubt whether this is actually needed. rsync will use temp-file, and then move to correct file name. So the include .xml should perhaps have been sufficient.
 
-# $1 source directory to watch for (will be impliticly converted to temp dir)
-# $2 s3-bucket destination
 watch_temp() {
-  tempdir=$(temp_source $1)
-  s3s=$2
-  archive=$(archive_dir $source)
-  mkdir -p "$archive"
-  inotifywait "$tempdir" --include '.*\.xml$' --monitor -e moved_to --format "%f" | \
+  mkdir -p "$ARCHIVE_DIR"
+  inotifywait "$TEMP_DIR" --include '.*\.xml$' --monitor -e moved_to --format "%f" | \
     while read -r file; do
-      full_path="$tempdir/$file"
-      for s3 in $s3s ; do
-        s3cmd -c "$s3".cfg --no-check-md5 --preserve --stats    put "$full_path" "s3://$s3"  | tee -a "$LOGS/$(key "$1").log"
+      full_path="$TEMP_DIR/$file"
+      for s3 in $S3S ; do
+        s3cmd -c "$s3".cfg --no-check-md5 --preserve --stats    put "$full_path" "s3://$s3"  | tee -a "$LOG_FILE"
       done
-      mv "$full_path" "$archive" | tee -a "$LOGS/$(key "$1").log"
+      mv -v "$full_path" "$ARCHIVE_DIR" | tee -a "$LOG_FILE"
     done
 }
 
 start() {
   mkdir -p "$LOGS"
-  echo "Logging to $LOGS"
+  echo "Logging to $LOG_FILE"
   # start with copying files already there
-  copy_to_s3 "$1" "$2"
+  copy_to_s3
 
   # temp directory is watched to copy to s3 (and then move the file to archive)
-  watch_temp "$1" "$2" &
+  watch_temp  &
 
-
-  # appearing files are moved to a auxiliary temp dir
-  watch_to_copy "$1"
-
-
-
-
+  # appearing files are moved to  temp dir
+  watch_to_copy
 }
 
-start "$@"
+start
